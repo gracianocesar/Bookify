@@ -8,7 +8,7 @@ namespace Bookify.Domain.Bookings
     public sealed class Booking : Entity
     {
         private Booking(
-            Guid id, 
+            Guid id,
             Guid apartmentId,
             Guid userId,
             DateRange duration,
@@ -17,7 +17,7 @@ namespace Bookify.Domain.Bookings
             Money amenitiesUpCharge,
             Money totalPrice,
             BookingStatus status,
-            DateTime createdOnUtc) 
+            DateTime createdOnUtc)
             : base(id)
         {
             ApartmentId = apartmentId;
@@ -46,11 +46,11 @@ namespace Bookify.Domain.Bookings
         public DateTime CompletedOnUtc { get; private set; }
         public DateTime CancelledOnUtc { get; private set; }
 
-        public static Booking Reserve(Apartment apartment,                                      
+        public static Booking Reserve(Apartment apartment,
                                       Guid userId,
                                       DateRange duration,
                                       DateTime utcNow,
-                                      PricingService pricingService) 
+                                      PricingService pricingService)
         {
             var pricingDetails = pricingService.CalculatePrice(apartment, duration);
 
@@ -71,5 +71,72 @@ namespace Bookify.Domain.Bookings
 
             return booking;
         }
+
+        public Result Confirm(DateTime utcNow)
+        {
+            if (Status != BookingStatus.Reserved)
+            {
+                return Result.Failure(BookingErrors.NotReserved);
+            }
+
+            Status = BookingStatus.Confirmed;
+            ConfirmedOnUtc = utcNow;
+
+            RaiseDomainEnvent(new BookigCofirmedDomainEvent(Id));
+
+            return Result.Success();
+        }
+
+        public Result Reject(DateTime utcNow)
+        {
+            if (Status != BookingStatus.Reserved)
+            {
+                return Result.Failure(BookingErrors.NotReserved);
+            }
+
+            Status = BookingStatus.Rejected;
+            RejctedOnUtc = utcNow;
+
+            RaiseDomainEnvent(new BookigCofirmedDomainEvent(Id));
+
+            return Result.Success();
+        }
+
+        public Result Complete(DateTime utcNow)
+        {
+            if (Status != BookingStatus.Confirmed)
+            {
+                return Result.Failure(BookingErrors.NotConfirmed);
+            }
+
+            Status = BookingStatus.Completed;
+            CompletedOnUtc = utcNow;
+
+            RaiseDomainEnvent(new BookigCofirmedDomainEvent(Id));
+
+            return Result.Success();
+        }
+
+        public Result Cancel(DateTime utcNow)
+        {
+            if (Status != BookingStatus.Confirmed)
+            {
+                return Result.Failure(BookingErrors.NotConfirmed);
+            }
+
+            var currentDate = DateOnly.FromDateTime(utcNow);
+            if (currentDate > Duration.Start)
+            {
+                return Result.Failure(BookingErrors.AlreadyStarted);
+            }
+
+
+            Status = BookingStatus.Cancelled;
+            CancelledOnUtc = utcNow;
+
+            RaiseDomainEnvent(new BookigCofirmedDomainEvent(Id));
+
+            return Result.Success();
+        }  
     }
 }
